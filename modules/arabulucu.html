@@ -60,6 +60,44 @@
         }
     }
 
+    // AAÜT İkinci Kısım - Kademeli Nispi Ücret Hesaplama ve Detaylandırma
+    function kademeliNispiHesapla(tutar) {
+        if (!tutar || tutar <= 0) return { toplam: 0, detaylar: [] };
+
+        const kademeler = [
+            { etiket: "İlk 600.000,00 TL'ye kadar olan kısım", limit: 600000, oran: 0.06, oranYuzde: "%6" },
+            { etiket: "Sonra gelen 960.000,00 TL'ye kadar olan kısım", limit: 960000, oran: 0.05, oranYuzde: "%5" },
+            { etiket: "Sonra gelen 1.560.000,00 TL'ye kadar olan kısım", limit: 1560000, oran: 0.04, oranYuzde: "%4" },
+            { etiket: "Sonra gelen 3.120.000,00 TL'ye kadar olan kısım", limit: 3120000, oran: 0.03, oranYuzde: "%3" },
+            { etiket: "Sonra gelen 9.360.000,00 TL'ye kadar olan kısım", limit: 9360000, oran: 0.02, oranYuzde: "%2" },
+            { etiket: "Sonra gelen 12.480.000,00 TL'ye kadar olan kısım", limit: 12480000, oran: 0.015, oranYuzde: "%1,5" },
+            { etiket: "Sonra gelen 24.960.000,00 TL'ye kadar olan kısım", limit: 24960000, oran: 0.01, oranYuzde: "%1" },
+            { etiket: "Aşan kısım için", limit: Infinity, oran: 0.005, oranYuzde: "%0,5" }
+        ];
+
+        let kalan = tutar;
+        let toplamUcret = 0;
+        let detaylar = [];
+
+        for (let k of kademeler) {
+            if (kalan <= 0) break;
+            let dilim = Math.min(kalan, k.limit);
+            let ucret = dilim * k.oran;
+            toplamUcret += ucret;
+
+            detaylar.push({
+                etiket: k.etiket,
+                oranYuzde: k.oranYuzde,
+                dilimTutar: dilim,
+                dilimUcret: ucret
+            });
+
+            kalan -= dilim;
+        }
+
+        return { toplam: toplamUcret, detaylar: detaylar };
+    }
+
     function hesaplaArabuluculuk() {
         const turEl = document.getElementById('tur');
         const tarafEl = document.getElementById('taraf');
@@ -79,13 +117,48 @@
         const veri = TARIFE[tur] || TARIFE['diger'];
         const maktu = veri[tIndex] || veri[0];
         const saatlik = veri[3];
-        const ekUcret = Math.max(0, saat - 2) * saatlik;
+        const ekSaat = Math.max(0, saat - 2);
+        const ekUcret = ekSaat * saatlik;
         
-        let finalUcret = (sonuc === 'anlasamama') 
-            ? (maktu + ekUcret) 
-            : (Math.max(anlasmaTutari * 0.06, maktu) + ekUcret);
+        if (sonuc === 'anlasamama') {
+            let finalUcret = maktu + ekUcret;
+            let html = `<div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;">Toplam Ücret: ${finalUcret.toLocaleString('tr-TR')} TL</div>`;
+            html += `<hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">`;
+            html += `<div style="font-size: 0.88rem; text-align: left;">`;
+            html += `<strong>⚖️ Hukuki Hesaplama Mantığı (AAÜT Birinci Kısım)</strong><br>`;
+            html += `• Maktu Tarife Ücreti: ${maktu.toLocaleString('tr-TR')} TL<br>`;
+            if (ekSaat > 0) {
+                html += `• 2 Saati Aşan Süre (${ekSaat} saat x ${saatlik.toLocaleString('tr-TR')} TL): ${ekUcret.toLocaleString('tr-TR')} TL<br>`;
+            }
+            html += `</div>`;
+            ciktiEl.innerHTML = html;
+        } else {
+            const nispiRes = kademeliNispiHesapla(anlasmaTutari);
+            let tabanUcret = Math.max(nispiRes.toplam, maktu);
+            let finalUcret = tabanUcret + ekUcret;
 
-        ciktiEl.innerHTML = `<strong>Toplam Ücret: ${finalUcret.toLocaleString('tr-TR')} TL</strong>`;
+            let html = `<div style="font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; color: var(--accent);">Toplam Ücret: ${finalUcret.toLocaleString('tr-TR')} TL</div>`;
+            html += `<hr style="border-color: rgba(255,255,255,0.15); margin: 12px 0;">`;
+            html += `<div style="font-size: 0.85rem; text-align: left; line-height: 1.5;">`;
+            html += `<strong style="color: var(--primary-light);">⚖️ Hukuki Hesaplama Mantığı (AAÜT İkinci Kısım)</strong><br>`;
+            html += `<span style="font-size: 0.8rem; color: var(--text-muted);">${anlasmaTutari.toLocaleString('tr-TR')} TL Anlaşma Tutarı İçin Kademeli Tarife Dökümü:</span><br><br>`;
+
+            nispiRes.detaylar.forEach(d => {
+                html += `• ${d.etiket} (${d.oranYuzde}):<br>`;
+                html += `&nbsp;&nbsp;&nbsp;&nbsp;<em>${d.dilimTutar.toLocaleString('tr-TR')} TL × ${d.oranYuzde} = <strong>${d.dilimUcret.toLocaleString('tr-TR')} TL</strong></em><br>`;
+            });
+
+            if (nispiRes.toplam < maktu) {
+                html += `<br><span style="color: var(--danger);">* Nispi ücret maktu tarife sınırının (${maktu.toLocaleString('tr-TR')} TL) altında kaldığı için maktu ücret uygulanmıştır.</span><br>`;
+            }
+
+            if (ekSaat > 0) {
+                html += `<br>• Ek Süre Ücreti (${ekSaat} saat x ${saatlik.toLocaleString('tr-TR')} TL): <strong>${ekUcret.toLocaleString('tr-TR')} TL</strong><br>`;
+            }
+
+            html += `</div>`;
+            ciktiEl.innerHTML = html;
+        }
     }
 
     hesaplaArabuluculuk();
