@@ -1,39 +1,50 @@
-<!-- Harici Kütüphaneler (PDF.js ve Tesseract.js OCR) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-<script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-</script>
 
-<div class="card">
-    <h3 style="margin-bottom: 10px; color: var(--primary-light);">📄 Akıllı PDF ve OCR İşlem Merkezi</h3>
-    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
-        Normal veya Taranmış PDF'lerinizi okutabilir, özetleyebilir ve diğer dönüştürme işlemlerini (KVKK uyumlu şekilde cihazınızda) gerçekleştirebilirsiniz.
-    </p>
+<div class="card" style="padding: 20px;">
+    <h3>🔍 OCR (Yapay Zeka) Belge Okuma Merkezi</h3>
+    <p>Bu modül, metin katmanı olmayan taranmış belgelerinizi (örneğin "4. sohbet_3.pdf" gibi[span_1](start_span)[span_1](end_span)) resimden metne çevirir.</p>
 
-    <!-- TEK YÜKLEME ALANI -->
-    <div style="border: 2px dashed var(--primary-light); padding: 30px; text-align: center; border-radius: 8px; background: rgba(255,255,255,0.02); cursor: pointer;" onclick="document.getElementById('fileInput').click()">
-        <input type="file" id="fileInput" accept=".pdf, .jpg, .jpeg, .png, .webp" multiple style="display: none;" onchange="dosyalarSecildi(event)">
-        <div style="font-size: 2.2rem; margin-bottom: 8px;">📂</div>
-        <strong style="color: var(--primary-light); font-size: 1.05rem;">Dosya(ları) Seçin veya Buraya Sürükleyin</strong>
+    <input type="file" id="ocrFileInput" accept=".pdf" onchange="ocrIsleminiBaslat(event)" style="margin-bottom: 20px;">
+    
+    <div id="ocrSonucAlani" style="display:none; background: #222; padding: 15px; border-radius: 5px; margin-top: 20px; color: #0f0; font-family: monospace; max-height: 400px; overflow-y: auto; white-space: pre-wrap;">
+        ⏳ İşleniyor... Lütfen bekleyin. Sayfa sayısı arttıkça süre uzayabilir.
     </div>
+</div>
 
-    <!-- İŞLEM PANELİ -->
-    <div id="islemPaneli" style="display: none; margin-top: 20px; background: rgba(255,255,255,0.04); padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-        <h4 style="color: var(--accent); margin-bottom: 15px;">🛠️ Yapılacak İşlem</h4>
-        
-        <div id="dosyaListesiDetay" style="font-size: 0.88rem; margin-bottom: 15px;"></div>
+<script>
+    async function ocrIsleminiBaslat(event) {
+        const file = event.target.files[0];
+        const sonucDiv = document.getElementById('ocrSonucAlani');
+        sonucDiv.style.display = 'block';
+        sonucDiv.innerText = "⏳ OCR işlemi başladı, lütfen sayfayı kapatmayın...";
 
-        <div class="form-group" style="margin-bottom: 15px;">
-            <select id="islemTipi" class="form-control" style="margin-top: 5px;">
-                <option value="oku">📖 Normal PDF Oku (Sadece Dijital Metinler)</option>
-                <option value="ocr_oku">🔍 Taranmış PDF'i Oku (Yapay Zeka OCR ile)</option>
-                <option value="ozet">📝 PDF İçeriğini Özetle</option>
-                <option value="sikistir">🗜️ Dosya Boyutunu Sıkıştır</option>
-                <option value="ayikla">✂️ Sayfa Ayıklama</option>
-                <option value="birlestir">📑 Belgeleri Birleştir</option>
-            </select>
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const worker = await Tesseract.createWorker('tur');
+            let fullText = "";
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                sonucDiv.innerText = `⏳ ${i}. sayfa işleniyor...`;
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2.0 }); // Netlik için ölçek
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                const { data: { text } } = await worker.recognize(canvas);
+                fullText += `\n--- SAYFA ${i} ---\n${text}\n`;
+            }
+            await worker.terminate();
+            sonucDiv.innerText = fullText;
+        } catch (err) {
+            sonucDiv.innerText = "❌ Hata: " + err.message;
+        }
+    }
+</script>
         </div>
 
         <button onclick="islemiBaslat()" class="btn btn-success" style="padding: 8px 18px; font-weight: bold;">
