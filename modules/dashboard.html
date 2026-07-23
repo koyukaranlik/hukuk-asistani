@@ -1,0 +1,60 @@
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+    <div class="stat-card"><div class="stat-icon">📅</div><div><div class="stat-val" id="dash-toplam-sure">2</div><div class="stat-lbl">Aktif Hak Düşürücü Süre</div></div></div>
+    <div class="stat-card"><div class="stat-icon">⚠️</div><div><div class="stat-val" style="color: var(--danger);">1</div><div class="stat-lbl">Yaklaşan Kritik Süre</div></div></div>
+    <div class="stat-card"><div class="stat-icon">⚖️</div><div><div class="stat-val">8</div><div class="stat-lbl">Takip Edilen Dava</div></div></div>
+    <div class="stat-card"><div class="stat-icon">📑</div><div><div class="stat-val">14</div><div class="stat-lbl">Hazırlanan Dilekçe</div></div></div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <div class="calendar-header">
+            <span class="card-title" id="dashTakvimBaslik">Temmuz 2026</span>
+            <div>
+                <button onclick="dashAyDegistir(-1)" class="nav-btn" style="display:inline-block">‹ Önceki</button>
+                <button onclick="dashAyDegistir(1)" class="nav-btn" style="display:inline-block">Sonraki ›</button>
+            </div>
+        </div>
+        <div class="calendar-grid" id="dashTakvimMatris"></div>
+    </div>
+    <div>
+        <div class="card">
+            <div class="card-title">🚨 Yaklaşan Son Günler</div>
+            <div id="dashSureListesi">
+                <div style="padding: 10px; background: rgba(245, 101, 101, 0.1); border-left: 3px solid var(--danger); margin-bottom: 8px; border-radius: 4px;">
+                    <strong style="color: var(--danger);">Ankara Valiliği</strong><br>
+                    <small>Savunma Cevabı Vermek</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function renderTakvimMatris(matrisId, baslikId) {
+        const matris = document.getElementById(matrisId);
+        const baslik = document.getElementById(baslikId);
+        if (!matris) return;
+
+        matris.innerHTML = '';
+        const yil = mevcutTarih.getFullYear(); 
+        const ay = mevcutTarih.getMonth();
+        const ayAdlari = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylul", "Ekim", "Kasım", "Aralık"];
+        
+        if (baslik) baslik.innerText = `${ayAdlari[ay]} ${yil}`;
+        
+        const toplamGun = new Date(yil, ay + 1, 0).getDate();
+        for (let d = 1; d <= toplamGun; d++) {
+            const dayCell = document.createElement('div'); 
+            dayCell.className = 'calendar-day';
+            dayCell.innerHTML = `<span class="day-number">${d}</span>`;
+            matris.appendChild(dayCell);
+        }
+    }
+
+    function dashAyDegistir(y) { 
+        mevcutTarih.setMonth(mevcutTarih.getMonth() + y); 
+        renderTakvimMatris('dashTakvimMatris', 'dashTakvimBaslik'); 
+    }
+
+    renderTakvimMatris('dashTakvimMatris', 'dashTakvimBaslik');
+</script>

@@ -1,0 +1,66 @@
+<div style="display: grid; grid-template-columns: 380px 1fr; gap: 20px;">
+    <div class="card">
+        <div class="card-title">⚡ Süre / Duruşma Girişi</div>
+        <form id="sureForm" onsubmit="kayitEkle(event)">
+            <div class="form-group">
+                <label>Usul Rejimi</label>
+                <select class="form-control" id="usulRejimi">
+                    <option value="iyuk">2577 s. İYUK</option>
+                    <option value="hmk">6100 s. HMK</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Karşı Taraf</label>
+                <input type="text" class="form-control" id="karsiTaraf" required placeholder="Örn: X Kurumu / Şahıs">
+            </div>
+            <div class="form-group">
+                <label>Tebligat Tarihi</label>
+                <input type="date" class="form-control" id="tebligatTarihi">
+            </div>
+            <button type="submit" class="btn">💾 Ajandaya İşle</button>
+        </form>
+    </div>
+    <div class="card">
+        <div class="calendar-header">
+            <span class="card-title" id="modulTakvimBaslik">Temmuz 2026</span>
+        </div>
+        <div class="calendar-grid" id="modulTakvimMatris"></div>
+    </div>
+</div>
+
+<script>
+    function renderTakvimMatris(matrisId, baslikId) {
+        const matris = document.getElementById(matrisId);
+        const baslik = document.getElementById(baslikId);
+        if (!matris) return;
+
+        matris.innerHTML = '';
+        const yil = mevcutTarih.getFullYear(); 
+        const ay = mevcutTarih.getMonth();
+        const ayAdlari = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+        
+        if (baslik) baslik.innerText = `${ayAdlari[ay]} ${yil}`;
+        
+        const toplamGun = new Date(yil, ay + 1, 0).getDate();
+        for (let d = 1; d <= toplamGun; d++) {
+            const dayCell = document.createElement('div'); 
+            dayCell.className = 'calendar-day';
+            dayCell.innerHTML = `<span class="day-number">${d}</span>`;
+            matris.appendChild(dayCell);
+        }
+    }
+
+    function kayitEkle(e) {
+        if (e) e.preventDefault();
+        const karsiTaraf = document.getElementById('karsiTaraf')?.value;
+        const tebligatTarihi = document.getElementById('tebligatTarihi')?.value;
+        if (karsiTaraf) {
+            if (typeof kayitlar !== 'undefined') {
+                kayitlar.push({ tarih: tebligatTarihi || "2026-07-23", taraf: karsiTaraf, konu: "Yeni Kayıt" });
+            }
+            alert("Kayıt başarıyla eklendi.");
+        }
+    }
+
+    renderTakvimMatris('modulTakvimMatris', 'modulTakvimBaslik');
+</script>

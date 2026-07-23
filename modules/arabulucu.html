@@ -1,1 +1,92 @@
+<div class="card arabulucu-grid">
+    <div>
+        <h3 style="margin-bottom: 15px; color: var(--primary-light);">Arabuluculuk Parametreleri</h3>
+        <div class="form-group">
+            <label>Uyuşmazlık Türü</label>
+            <select id="tur" onchange="hesaplaArabuluculuk()" class="form-control">
+                <option value="is">İş Hukuku</option>
+                <option value="ticari">Ticari</option>
+                <option value="kira">Kira</option>
+                <option value="ortaklik">Ortaklığın Giderilmesi</option>
+                <option value="tuketici">Tüketici</option>
+                <option value="diger">Diğer</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Taraf Sayısı</label>
+            <select id="taraf" onchange="hesaplaArabuluculuk()" class="form-control">
+                <option value="2">2 Taraf</option>
+                <option value="3">3-5 Taraf</option>
+                <option value="6">6 ve Fazlası</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Toplam Süre (Saat)</label>
+            <input type="number" id="sure" value="2" onkeyup="hesaplaArabuluculuk()" onchange="hesaplaArabuluculuk()" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Süreç Sonucu</label>
+            <select id="sonuc" onchange="toggleAnlasma(); hesaplaArabuluculuk()" class="form-control">
+                <option value="anlasamama">Anlaşamama</option>
+                <option value="anlasma">Anlaşma Sağlandı</option>
+            </select>
+        </div>
+        <div id="anlasmaAlani" style="display:none;" class="form-group">
+            <label>Anlaşma Tutarı (TL)</label>
+            <input type="number" id="tutar" placeholder="0" onkeyup="hesaplaArabuluculuk()" onchange="hesaplaArabuluculuk()" class="form-control">
+        </div>
+    </div>
+    <div>
+        <h3 style="margin-bottom: 15px; color: var(--primary-light);">Hesaplama Sonucu</h3>
+        <div class="res-box" id="cikti">Parametreleri giriniz...</div>
+    </div>
+</div>
 
+<script>
+    const TARIFE = { 
+        'is': [4520, 4920, 5120, 2260], 
+        'ticari': [6000, 6400, 6600, 3000], 
+        'kira': [4680, 5080, 5280, 2340], 
+        'ortaklik': [4680, 5080, 5280, 2340], 
+        'tuketici': [4000, 4400, 4600, 2000], 
+        'diger': [4000, 4400, 4600, 2000] 
+    };
+
+    function toggleAnlasma() { 
+        const anlasmaAlani = document.getElementById('anlasmaAlani');
+        const sonucEl = document.getElementById('sonuc');
+        if (anlasmaAlani && sonucEl) {
+            anlasmaAlani.style.display = sonucEl.value === 'anlasma' ? 'block' : 'none'; 
+        }
+    }
+
+    function hesaplaArabuluculuk() {
+        const turEl = document.getElementById('tur');
+        const tarafEl = document.getElementById('taraf');
+        const sureEl = document.getElementById('sure');
+        const sonucEl = document.getElementById('sonuc');
+        const tutarEl = document.getElementById('tutar');
+        const ciktiEl = document.getElementById('cikti');
+
+        if (!turEl || !ciktiEl) return;
+
+        const tur = turEl.value;
+        const tIndex = tarafEl ? tarafEl.selectedIndex : 0;
+        const saat = parseInt(sureEl ? sureEl.value : 2) || 2;
+        const sonuc = sonucEl ? sonucEl.value : 'anlasamama';
+        const anlasmaTutari = parseFloat(tutarEl ? tutarEl.value : 0) || 0;
+        
+        const veri = TARIFE[tur] || TARIFE['diger'];
+        const maktu = veri[tIndex] || veri[0];
+        const saatlik = veri[3];
+        const ekUcret = Math.max(0, saat - 2) * saatlik;
+        
+        let finalUcret = (sonuc === 'anlasamama') 
+            ? (maktu + ekUcret) 
+            : (Math.max(anlasmaTutari * 0.06, maktu) + ekUcret);
+
+        ciktiEl.innerHTML = `<strong>Toplam Ücret: ${finalUcret.toLocaleString('tr-TR')} TL</strong>`;
+    }
+
+    hesaplaArabuluculuk();
+</script>
