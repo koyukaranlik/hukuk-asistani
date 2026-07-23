@@ -1,39 +1,330 @@
-<!-- Client-side PDF İşleme Kütüphanesi -->
+<!-- Harici İstemci Tarafı Kütüphaneleri -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 
-<!-- PDF Düzenleme Araçları (Birleştirme & Sayfa Çıkarma) -->
-<div class="grid-2">
-    <!-- 1. PDF Birleştirme Kartı -->
-    <div class="card">
-        <div class="card-title">🔗 Çoklu PDF Birleştirme</div>
-        <div class="form-group">
-            <label>Birleştirilecek PDF Dosyalarını Seçin (CTRL / SHIFT ile çoklu seçin)</label>
-            <input type="file" id="mergePdfInput" accept=".pdf" multiple class="form-control">
-        </div>
-        <button class="btn btn-success" onclick="pdfBirlestir()">📑 PDF'leri Birleştir ve İndir</button>
-        <div id="merge-durum" style="margin-top: 10px; font-size: 0.85rem; color: var(--primary-light); font-weight: 600;"></div>
+<div class="card">
+    <h3 style="margin-bottom: 10px; color: var(--primary-light);">🗜️ Belge Boyutu Sıkıştırma ve İnceleme Modülü</h3>
+    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
+        UYAP ve Kurum sistemlerindeki yükleme sınırlarına takılmamak için PDF, TIF, JPEG ve PNG dosyalarınızın kalitesini bozmadan boyutunu düşürebilirsiniz.
+    </p>
+
+    <!-- 1. SIKIŞTIRMA VE DOSYA YÜKLEME ALANI -->
+    <div style="border: 2px dashed var(--primary-light); padding: 25px; text-align: center; border-radius: 8px; background: rgba(255,255,255,0.02); cursor: pointer;" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".pdf, .tif, .tiff, .jpg, .jpeg, .png, .webp" style="display: none;" onchange="dosyaSecildi(event)">
+        <div style="font-size: 2rem; margin-bottom: 8px;">🗜️</div>
+        <strong style="color: var(--primary-light);">Sıkıştırılacak veya İncenlenecek Dosyayı Seçin</strong>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Desteklenen Formatlar: PDF, TIF, JPEG, PNG, WEBP</p>
     </div>
 
-    <!-- 2. PDF Sayfa Çıkarma / Ayıklama Kartı -->
-    <div class="card">
-        <div class="card-title">✂️ PDF'ten Sayfa Çıkarma / Ayıklama</div>
-        <div class="form-group">
-            <label>İşlenecek PDF Dosyasını Seçin</label>
-            <input type="file" id="splitPdfInput" accept=".pdf" class="form-control">
+    <!-- 2. AKTİF DOSYA BİLGİİ VE ÖNİZLEME KART -->
+    <div id="bilgiKarti" style="display: none; margin-top: 20px; background: rgba(255,255,255,0.04); padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+        <h4 style="color: var(--accent); margin-bottom: 15px; font-size: 1.05rem;">🔍 Belge Detayları, Önizleme ve Sıkıştırma Seçenekleri</h4>
+        
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+            <!-- Önizleme Alanı -->
+            <div style="width: 170px; min-height: 220px; background: #000; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <canvas id="pdfCanvas" style="max-width: 100%; max-height: 230px; display: none;"></canvas>
+                <img id="imgPreview" style="max-width: 100%; max-height: 230px; display: none; object-fit: contain;">
+                <div id="previewLoader" style="font-size: 0.8rem; color: var(--text-muted); padding: 10px; text-align: center;">Önizleme Yükleniyor...</div>
+            </div>
+
+            <!-- Bilgiler & Sıkıştırma Paneli -->
+            <div style="flex: 1; min-width: 260px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 15px;">
+                    <tr>
+                        <td style="padding: 4px 0; color: var(--text-muted); width: 120px;"><strong>Dosya Adı:</strong></td>
+                        <td id="infoName" style="padding: 4px 0; font-weight: 600; word-break: break-all;">-</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: var(--text-muted);"><strong>Mevcut Boyut:</strong></td>
+                        <td id="infoSize" style="padding: 4px 0; font-weight: bold; color: #f39c12;">-</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: var(--text-muted);"><strong>Sayfa / Tür:</strong></td>
+                        <td id="infoPages" style="padding: 4px 0;">-</td>
+                    </tr>
+                </table>
+
+                <!-- Sıkıştırma Kontrolleri -->
+                <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="font-size: 0.85rem; font-weight: bold; color: var(--primary-light);">Sıkıştırma Seviyesi:</label>
+                    <div style="display: flex; gap: 15px; margin-top: 8px;">
+                        <label style="font-size: 0.82rem; cursor: pointer;"><input type="radio" name="sikistirmaOrani" value="0.75"> Düşük (%25 Küçültme)</label>
+                        <label style="font-size: 0.82rem; cursor: pointer;"><input type="radio" name="sikistirmaOrani" value="0.50" checked> Dengeli (%50 Küçültme - Önerilen)</label>
+                        <label style="font-size: 0.82rem; cursor: pointer;"><input type="radio" name="sikistirmaOrani" value="0.30"> Yüksek (%70 Küçültme)</label>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="dosyayiSikistirAndIndir()" class="btn btn-success" style="padding: 8px 16px; font-weight: bold;">
+                        🗜️ Sıkıştır ve İndir
+                    </button>
+                    <button onclick="dosyayiKaydetIDB()" class="btn" style="background: var(--primary-light); padding: 8px 16px;">
+                        💾 Yerel Hafızaya Kaydet
+                    </button>
+                </div>
+                <div id="sikistirmaDurum" style="margin-top: 10px; font-size: 0.85rem; font-weight: 600; color: var(--accent);"></div>
+            </div>
         </div>
-        <div class="form-group">
-            <label>Alınacak Sayfalar (Örn: 1-3, 5, 12-15)</label>
-            <input type="text" id="splitSayfaInput" class="form-control" placeholder="Örn: 1-5, 8, 12">
+    </div>
+
+    <!-- 3. KAYITLI BELGELERİM LİSTESİ -->
+    <div style="margin-top: 30px;">
+        <h4 style="color: var(--primary-light); margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+            📦 Kayıtlı Belgelerim (Cihaz Depolaması)
+        </h4>
+        <div id="kayitliDosyalarListesi" style="display: grid; gap: 8px;">
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Kayıtlı belge bulunmuyor.</p>
         </div>
-        <button class="btn" onclick="pdfSayfaCikar()">✂️ Seçili Sayfaları Yeni PDF Yap ve İndir</button>
-        <div id="split-durum" style="margin-top: 10px; font-size: 0.85rem; color: var(--primary-light); font-weight: 600;"></div>
     </div>
 </div>
 
-<!-- 3. Belge Okuma & OCR Metin Arama Alanı -->
-<div class="card">
-    <h3 style="margin-bottom: 15px; color: var(--primary-light);">📄 Belge Metin Okuma (OCR / TIF / PDF) & Word'e Aktar</h3>
-    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
+<script>
+    let aktifDosya = null;
+    let db = null;
+
+    // 1. IndexedDB Veritabanı Kurulumu
+    function initDB() {
+        const request = indexedDB.open("HukukAsistaniDB", 1);
+        request.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("belgeler")) {
+                db.createObjectStore("belgeler", { keyPath: "id", autoIncrement: true });
+            }
+        };
+        request.onsuccess = function(e) {
+            db = e.target.result;
+            kayitliBelgeleriYukle();
+        };
+    }
+
+    // 2. Dosya Seçildiğinde Bilgileri Hazırla ve Önizle
+    async function dosyaSecildi(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        aktifDosya = file;
+        document.getElementById('bilgiKarti').style.display = 'block';
+        document.getElementById('infoName').innerText = file.name;
+        document.getElementById('infoSize').innerText = formatBytes(file.size);
+        document.getElementById('sikistirmaDurum').innerText = "";
+
+        const canvas = document.getElementById('pdfCanvas');
+        const img = document.getElementById('imgPreview');
+        const loader = document.getElementById('previewLoader');
+
+        canvas.style.display = 'none';
+        img.style.display = 'none';
+        loader.style.display = 'block';
+
+        if (file.type === "application/pdf" || file.name.endsWith('.pdf')) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                document.getElementById('infoPages').innerText = pdf.numPages + " Sayfa (PDF)";
+
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 0.4 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+
+                loader.style.display = 'none';
+                canvas.style.display = 'block';
+            } catch (err) {
+                loader.innerText = "PDF Önizlenemedi";
+            }
+        } else if (file.type.startsWith("image/")) {
+            document.getElementById('infoPages').innerText = "1 Sayfa (Görsel)";
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                loader.style.display = 'none';
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            document.getElementById('infoPages').innerText = "1 Belge";
+            loader.innerText = "Önizleme Desteklenmiyor";
+        }
+    }
+
+    // 3. DOSYA SIKIŞTIRMA VE İNDİRME MOTORU
+    async function dosyayiSikistirAndIndir() {
+        if (!aktifDosya) return alert("Lütfen önce bir dosya seçin.");
+
+        const durumEl = document.getElementById('sikistirmaDurum');
+        const seciliKalite = parseFloat(document.querySelector('input[name="sikistirmaOrani"]:checked').value);
+        durumEl.innerText = "⏳ Dosya sıkıştırılıyor, lütfen bekleyiniz...";
+
+        try {
+            const fileName = aktifDosya.name.toLowerCase();
+
+            // A) GÖRSEL SIKIŞTIRMA (JPEG, PNG, WEBP)
+            if (aktifDosya.type.startsWith("image/")) {
+                const img = new Image();
+                img.src = URL.createObjectURL(aktifDosya);
+                await img.decode();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                canvas.toBlob((blob) => {
+                    indirmeLinkiOlustur(blob, "Sikistirilmis_" + aktifDosya.name);
+                    durumEl.innerText = `✅ Başarılı! Boyut: ${formatBytes(aktifDosya.size)} ➔ ${formatBytes(blob.size)}`;
+                }, 'image/jpeg', seciliKalite);
+            } 
+            // B) PDF SIKIŞTIRMA (SAYFALARI OPTİMİZE EDEREK YENİDEN OLUŞTURMA)
+            else if (fileName.endsWith('.pdf')) {
+                const arrayBuffer = await aktifDosya.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const newPdfDoc = await PDFLib.PDFDocument.create();
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    durumEl.innerText = `⏳ PDF Sıkıştırılıyor: Sayfa ${i} / ${pdf.numPages}...`;
+                    const page = await pdf.getPage(i);
+                    
+                    // Kaliteye göre ölçeklendirme faktörü
+                    const scale = seciliKalite < 0.5 ? 1.0 : 1.3;
+                    const viewport = page.getViewport({ scale: scale });
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    const ctx = canvas.getContext('2d');
+
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                    // Canvas'ı Düşük Boyutlu JPEG Image Verisine Dönüştür
+                    const imgDataUrl = canvas.toDataURL('image/jpeg', seciliKalite);
+                    const embeddedImg = await newPdfDoc.embedJpg(imgDataUrl);
+
+                    const newPage = newPdfDoc.addPage([viewport.width, viewport.height]);
+                    newPage.drawImage(embeddedImg, {
+                        x: 0,
+                        y: 0,
+                        width: viewport.width,
+                        height: viewport.height,
+                    });
+                }
+
+                const pdfBytes = await newPdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                indirmeLinkiOlustur(blob, "Sikistirilmis_" + aktifDosya.name);
+                durumEl.innerText = `✅ Başarılı! Boyut: ${formatBytes(aktifDosya.size)} ➔ ${formatBytes(blob.size)}`;
+            }
+        } catch (err) {
+            console.error(err);
+            durumEl.innerText = "⚠️ Sıkıştırma işlemi sırasında bir hata oluştu.";
+        }
+    }
+
+    // 4. İndirme Yardımcı Fonksiyonu
+    function indirmeLinkiOlustur(blob, dosyaAd) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = dosyaAd;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // 5. Yerel Depolama İşlemleri (IndexedDB)
+    function dosyayiKaydetIDB() {
+        if (!aktifDosya || !db) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const kayitData = {
+                adi: aktifDosya.name,
+                boyut: aktifDosya.size,
+                sayfa: document.getElementById('infoPages').innerText,
+                tarih: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'}),
+                data: e.target.result
+            };
+
+            const tx = db.transaction("belgeler", "readwrite");
+            tx.objectStore("belgeler").add(kayitData);
+
+            tx.oncomplete = function() {
+                alert("Belge başarıyla yerel hafızaya kaydedildi.");
+                kayitliBelgeleriYukle();
+            };
+        };
+        reader.readAsDataURL(aktifDosya);
+    }
+
+    function kayitliBelgeleriYukle() {
+        if (!db) return;
+
+        const tx = db.transaction("belgeler", "readonly");
+        const request = tx.objectStore("belgeler").getAll();
+
+        request.onsuccess = function() {
+            const listeEl = document.getElementById('kayitliDosyalarListesi');
+            const belgeler = request.result;
+
+            if (belgeler.length === 0) {
+                listeEl.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted);">Henüz kayıtlı bir belge yok.</p>`;
+                return;
+            }
+
+            let html = '';
+            belgeler.forEach(item => {
+                html += `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong style="color: var(--primary-light); font-size: 0.9rem;">📄 ${item.adi}</strong>
+                            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                                ${item.sayfa} | Boyut: ${formatBytes(item.boyut)} | Kayıt: ${item.tarih}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="kayitliBelgeIndir(${item.id})" style="background: var(--accent); color:#000; border:none; padding: 4px 8px; border-radius:4px; cursor:pointer; font-size:0.78rem; font-weight:600;">İndir</button>
+                            <button onclick="kayitliBelgeSil(${item.id})" style="background: #e74c3c; color:#fff; border:none; padding: 4px 8px; border-radius:4px; cursor:pointer; font-size:0.78rem;">Sil</button>
+                        </div>
+                    </div>
+                `;
+            });
+            listeEl.innerHTML = html;
+        };
+    }
+
+    function kayitliBelgeIndir(id) {
+        const tx = db.transaction("belgeler", "readonly");
+        const request = tx.objectStore("belgeler").get(id);
+        request.onsuccess = function() {
+            const item = request.result;
+            if (item) {
+                const a = document.createElement("a");
+                a.href = item.data;
+                a.download = item.adi;
+                a.click();
+            }
+        };
+    }
+
+    function kayitliBelgeSil(id) {
+        if (!confirm("Bu belgeyi silmek istediğinize emin misiniz?")) return;
+        const tx = db.transaction("belgeler", "readwrite");
+        tx.objectStore("belgeler").delete(id);
+        tx.oncomplete = function() { kayitliBelgeleriYukle(); };
+    }
+
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Byte';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    initDB();
+</script>
         <div class="form-group">
             <label>Yüklenecek Dosyayı Seçin (PDF, TIF, TIFF, JPEG, PNG)</label>
             <input type="file" id="pdfInput" accept=".pdf, .tif, .tiff, .jpg, .jpeg, .png" class="form-control" onchange="belgeYukleVeIsle(event)">
