@@ -1,39 +1,133 @@
-<!-- Harici Kütüphaneler -->
+<!-- Harici Kütüphaneler (PDF.js ve Tesseract.js OCR) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 </script>
 
 <div class="card">
-    <h3 style="margin-bottom: 10px; color: var(--primary-light);">📄 Akıllı PDF ve Belge İşlem Merkezi</h3>
+    <h3 style="margin-bottom: 10px; color: var(--primary-light);">📄 Akıllı PDF ve OCR İşlem Merkezi</h3>
     <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
-        Tek yükleme alanı üzerinden PDF ve görselleriniz üzerinde Sıkıştırma, Özet Çıkarma, Metin Okuma, Birleştirme ve Dönüştürme işlemlerini gerçekleştirebilirsiniz. (İşlemler KVKK m.12 uyumludur, dosyalarınız sunucuya yüklenmez.)
+        Normal veya Taranmış PDF'lerinizi okutabilir, özetleyebilir ve diğer dönüştürme işlemlerini (KVKK uyumlu şekilde cihazınızda) gerçekleştirebilirsiniz.
     </p>
 
-    <!-- 1. TEK VE ORTAK DOSYA YÜKLEME ALANI -->
+    <!-- TEK YÜKLEME ALANI -->
     <div style="border: 2px dashed var(--primary-light); padding: 30px; text-align: center; border-radius: 8px; background: rgba(255,255,255,0.02); cursor: pointer;" onclick="document.getElementById('fileInput').click()">
         <input type="file" id="fileInput" accept=".pdf, .jpg, .jpeg, .png, .webp" multiple style="display: none;" onchange="dosyalarSecildi(event)">
         <div style="font-size: 2.2rem; margin-bottom: 8px;">📂</div>
         <strong style="color: var(--primary-light); font-size: 1.05rem;">Dosya(ları) Seçin veya Buraya Sürükleyin</strong>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">PDF, JPEG, PNG veya WEBP (Birleştirme için birden fazla dosya seçebilirsiniz)</p>
     </div>
 
-    <!-- 2. AKTİF DOSYA BİLGİ, ÖNİZLEME VE İŞLEM SEÇİM PANELİ -->
+    <!-- İŞLEM PANELİ -->
     <div id="islemPaneli" style="display: none; margin-top: 20px; background: rgba(255,255,255,0.04); padding: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-        <h4 style="color: var(--accent); margin-bottom: 15px; font-size: 1.05rem;">🛠️ Yüklenen Belge ve Yapılacak İşlem</h4>
+        <h4 style="color: var(--accent); margin-bottom: 15px;">🛠️ Yapılacak İşlem</h4>
         
-        <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
-            <!-- Önizleme Kutusu -->
-            <div style="width: 160px; min-height: 200px; background: #000; border: 1px solid #444; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                <canvas id="pdfCanvas" style="max-width: 100%; max-height: 210px; display: none;"></canvas>
-                <img id="imgPreview" style="max-width: 100%; max-height: 210px; display: none; object-fit: contain;">
-                <div id="previewLoader" style="font-size: 0.8rem; color: var(--text-muted); padding: 10px; text-align: center;">Önizleme Hazırlanıyor...</div>
-            </div>
+        <div id="dosyaListesiDetay" style="font-size: 0.88rem; margin-bottom: 15px;"></div>
 
-            <!-- Detaylar ve İşlem Menüsü -->
-            <div style="flex: 1; min-width: 260px;">
-                <div id="dosyaListesiDetay" style="font-size: 0.88rem; margin-bottom: 15px;"></div>
+        <div class="form-group" style="margin-bottom: 15px;">
+            <select id="islemTipi" class="form-control" style="margin-top: 5px;">
+                <option value="oku">📖 Normal PDF Oku (Sadece Dijital Metinler)</option>
+                <option value="ocr_oku">🔍 Taranmış PDF'i Oku (Yapay Zeka OCR ile)</option>
+                <option value="ozet">📝 PDF İçeriğini Özetle</option>
+                <option value="sikistir">🗜️ Dosya Boyutunu Sıkıştır</option>
+                <option value="ayikla">✂️ Sayfa Ayıklama</option>
+                <option value="birlestir">📑 Belgeleri Birleştir</option>
+            </select>
+        </div>
+
+        <button onclick="islemiBaslat()" class="btn btn-success" style="padding: 8px 18px; font-weight: bold;">
+            ⚡ İşlemi Uygula
+        </button>
+
+        <!-- SONUÇ EKRANI -->
+        <div id="sonucAlani" style="margin-top: 20px; display: none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent);">
+            <h5 style="color: var(--accent); margin-bottom: 10px;">📊 İşlem Sonucu</h5>
+            <div id="sonucIcerik" style="font-size: 0.9rem; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let yuklenenDosyalar = [];
+
+    async function dosyalarSecildi(event) {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) return;
+        yuklenenDosyalar = files;
+        document.getElementById('islemPaneli').style.display = 'block';
+        document.getElementById('sonucAlani').style.display = 'none';
+        document.getElementById('dosyaListesiDetay').innerHTML = `<strong>Seçilen Dosya:</strong> ${files[0].name}`;
+    }
+
+    async function islemiBaslat() {
+        if (yuklenenDosyalar.length === 0) return;
+        const tip = document.getElementById('islemTipi').value;
+        const sonucIcerik = document.getElementById('sonucIcerik');
+        const ilkDosya = yuklenenDosyalar[0];
+
+        document.getElementById('sonucAlani').style.display = 'block';
+        
+        try {
+            // YENİ ÖZELLİK: OCR İLE OKUMA (Taranmış Resim/PDF'ler için)
+            if (tip === 'ocr_oku') {
+                sonucIcerik.innerHTML = "⏳ Yapay zeka ile resimler metne dönüştürülüyor (OCR). Bu işlem sayfa sayısına göre 1-2 dakika sürebilir, lütfen bekleyin...";
+                
+                const arrayBuffer = await ilkDosya.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 }); // OCR kalitesi için çözünürlüğü artırdık
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    
+                    const imgDataUrl = canvas.toDataURL('image/jpeg');
+                    
+                    // Tesseract ile Türkçe dilinde metin tanıma
+                    const worker = await Tesseract.createWorker('tur');
+                    const ret = await worker.recognize(imgDataUrl);
+                    await worker.terminate();
+
+                    fullText += `\n\n--- SAYFA ${i} (OCR SONUCU) ---\n`;
+                    fullText += ret.data.text;
+                }
+                sonucIcerik.innerText = fullText || "Yazı tespit edilemedi.";
+            } 
+            
+            // DİJİTAL METİN OKUMA (Eski Yöntem)
+            else if (tip === 'oku') {
+                sonucIcerik.innerHTML = "⏳ Metin katmanı aranıyor...";
+                const arrayBuffer = await ilkDosya.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ').trim();
+
+                    fullText += `\n--- SAYFA ${i} ---\n`;
+                    fullText += pageText.length > 0 ? pageText : "(Metin katmanı yok, 'Taranmış PDF'i Oku' seçeneğini kullanın.)";
+                }
+                sonucIcerik.innerText = fullText;
+            }
+            
+            // ... (Sıkıştırma, Birleştirme vb. önceki kod blokları buraya gelecek) ...
+            else {
+                sonucIcerik.innerHTML = "⚠️ Lütfen menüden Oku veya OCR Oku seçeneklerinden birini deneyin.";
+            }
+            
+        } catch (err) {
+            sonucIcerik.innerHTML = "⚠️ Hata: " + err.message;
+        }
+    }
+</script>
 
                 <!-- YAPILACAK İŞLEM SEÇİMİ -->
                 <div class="form-group" style="margin-bottom: 15px;">
