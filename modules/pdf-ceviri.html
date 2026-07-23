@@ -1,10 +1,14 @@
 <!-- Harici Kütüphaneler -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+</script>
 
 <div class="card">
     <h3 style="margin-bottom: 10px; color: var(--primary-light);">📄 Akıllı PDF ve Belge İşlem Merkezi</h3>
     <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
-        Tek yükleme alanı üzerinden PDF ve görselleriniz üzerinde Sıkıştırma, Özet Çıkarma, Metin Okuma, Birleştirme ve Dönüştürme işlemlerini gerçekleştirebilirsiniz.
+        Tek yükleme alanı üzerinden PDF ve görselleriniz üzerinde Sıkıştırma, Özet Çıkarma, Metin Okuma, Birleştirme ve Dönüştürme işlemlerini gerçekleştirebilirsiniz. (İşlemler KVKK m.12 uyumludur, dosyalarınız sunucuya yüklenmez.)
     </p>
 
     <!-- 1. TEK VE ORTAK DOSYA YÜKLEME ALANI -->
@@ -34,6 +38,284 @@
                 <!-- YAPILACAK İŞLEM SEÇİMİ -->
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="font-weight: bold; color: var(--primary-light);">Yapılacak İşlemi Seçin:</label>
+                    <select id="islemTipi" class="form-control" onchange="islemTipiDegisti()" style="margin-top: 5px;">
+                        <option value="oku">📖 Metin Okuma / Metin Çıkarma</option>
+                        <option value="ozet">📝 PDF İçeriğini Özetle</option>
+                        <option value="sikistir">🗜️ Dosya Boyutunu Sıkıştır</option>
+                        <option value="ayikla">✂️ Sayfa Ayıklama / Çıkarma</option>
+                        <option value="birlestir">📑 Belgeleri Birleştir (Çoklu Seçim)</option>
+                        <option value="donustur">🔄 Format Dönüştür (PDF ➔ Görsel / Görsel ➔ PDF)</option>
+                    </select>
+                </div>
+
+                <!-- Dinamik Parametre Alanları -->
+                <div id="parametreAlani" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px; margin-bottom: 15px; display: none;"></div>
+
+                <!-- Butonlar -->
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="islemiBaslat()" class="btn btn-success" style="padding: 8px 18px; font-weight: bold;">
+                        ⚡ İşlemi Uygula
+                    </button>
+                    <button onclick="dosyayiKaydetIDB()" class="btn" style="background: var(--primary-light); padding: 8px 16px;">
+                        💾 Yerel Hafızaya Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- İŞLEM SONUÇ / ÇIKTI EKRANI -->
+        <div id="sonucAlani" style="margin-top: 20px; display: none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent);">
+            <h5 style="color: var(--accent); margin-bottom: 10px;">📊 İşlem Sonucu</h5>
+            <div id="sonucIcerik" style="font-size: 0.9rem; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let yuklenenDosyalar = [];
+    let db = null;
+
+    // Dosya Seçim İşleyicisi
+    async function dosyalarSecildi(event) {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) return;
+
+        yuklenenDosyalar = files;
+        document.getElementById('islemPaneli').style.display = 'block';
+        document.getElementById('sonucAlani').style.display = 'none';
+
+        const detayEl = document.getElementById('dosyaListesiDetay');
+        if (files.length === 1) {
+            detayEl.innerHTML = `<strong>Seçilen Dosya:</strong> ${files[0].name} (${formatBytes(files[0].size)})`;
+        } else {
+            detayEl.innerHTML = `<strong>Seçilen Dosya Sayısı:</strong> ${files.length} Adet Belge`;
+        }
+
+        const file = files[0];
+        const canvas = document.getElementById('pdfCanvas');
+        const img = document.getElementById('imgPreview');
+        const loader = document.getElementById('previewLoader');
+
+        canvas.style.display = 'none';
+        img.style.display = 'none';
+        loader.style.display = 'block';
+
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf')) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 0.4 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+
+                loader.style.display = 'none';
+                canvas.style.display = 'block';
+            } catch (err) {
+                loader.innerText = "PDF Önizlenemedi";
+            }
+        } else if (file.type.startsWith("image/")) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                loader.style.display = 'none';
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        islemTipiDegisti();
+    }
+
+    function islemTipiDegisti() {
+        const tip = document.getElementById('islemTipi').value;
+        const pAlan = document.getElementById('parametreAlani');
+        pAlan.style.display = 'none';
+        pAlan.innerHTML = '';
+
+        if (tip === 'sikistir') {
+            pAlan.style.display = 'block';
+            pAlan.innerHTML = `
+                <label style="font-size:0.82rem; font-weight:bold;">Sıkıştırma Seviyesi:</label>
+                <select id="sikistirmaKalite" class="form-control" style="margin-top:4px;">
+                    <option value="0.75">Düşük Sıkıştırma (Yüksek Kalite)</option>
+                    <option value="0.50" selected>Orta Sıkıştırma (%50 Boyut Tasarrufu)</option>
+                    <option value="0.30">Yüksek Sıkıştırma (Maksimum Küçültme)</option>
+                </select>
+            `;
+        } else if (tip === 'ayikla') {
+            pAlan.style.display = 'block';
+            pAlan.innerHTML = `
+                <label style="font-size:0.82rem; font-weight:bold;">Çıkarılacak Sayfa Numaraları (Örn: 1, 3-5):</label>
+                <input type="text" id="ayiklaSayfalar" class="form-control" placeholder="1, 3, 5-7" style="margin-top:4px;">
+            `;
+        }
+    }
+
+    async function islemiBaslat() {
+        if (yuklenenDosyalar.length === 0) return alert("Lütfen önce bir dosya seçin.");
+
+        const tip = document.getElementById('islemTipi').value;
+        const sonucIcerik = document.getElementById('sonucIcerik');
+        document.getElementById('sonucAlani').style.display = 'block';
+        sonucIcerik.innerHTML = "⏳ İşlem yapılıyor, lütfen bekleyiniz...";
+
+        const ilkDosya = yuklenenDosyalar[0];
+
+        try {
+            // 1. METİN OKUMA / ÇIKARMA (DÜZELTİLMİŞ)
+            if (tip === 'oku') {
+                if (!ilkDosya.name.toLowerCase().endsWith('.pdf')) return sonucIcerik.innerHTML = "⚠️ Sadece PDF desteklenir.";
+                const arrayBuffer = await ilkDosya.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ').replace(/\s+/g, ' ').trim();
+
+                    fullText += `--- SAYFA ${i} ---\n`;
+                    fullText += pageText.length > 0 ? pageText + "\n\n" : "(Bu sayfada dijital metin katmanı bulunamadı)\n\n";
+                }
+                sonucIcerik.innerText = fullText;
+            }
+
+            // 2. ÖZETLEME
+            else if (tip === 'ozet') {
+                if (!ilkDosya.name.toLowerCase().endsWith('.pdf')) return sonucIcerik.innerHTML = "⚠️ Sadece PDF desteklenir.";
+                const arrayBuffer = await ilkDosya.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let tumMetin = "";
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    tumMetin += textContent.items.map(item => item.str).join(' ') + " ";
+                }
+
+                const cumleler = tumMetin.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/).filter(c => c.trim().length > 30);
+                if (cumleler.length < 3) return sonucIcerik.innerHTML = "⚠️ Özetlenecek yeterli metin bulunamadı.";
+
+                const ozetAdet = Math.min(6, Math.floor(cumleler.length * 0.2) || 3);
+                const adim = Math.max(1, Math.floor(cumleler.length / ozetAdet));
+                
+                let ozetHtml = `<strong>📌 Belge İçerik Özeti:</strong><br><br><ul style="padding-left:18px;">`;
+                for (let i = 0; i < cumleler.length && (i / adim) < ozetAdet; i += adim) {
+                    ozetHtml += `<li style="margin-bottom:8px;">${cumleler[i].trim()}</li>`;
+                }
+                ozetHtml += `</ul>`;
+                sonucIcerik.innerHTML = ozetHtml;
+            }
+
+            // 3. SIKIŞTIRMA
+            else if (tip === 'sikistir') {
+                const kalite = parseFloat(document.getElementById('sikistirmaKalite').value);
+                if (ilkDosya.name.toLowerCase().endsWith('.pdf')) {
+                    const arrayBuffer = await ilkDosya.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const newPdfDoc = await PDFLib.PDFDocument.create();
+
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: 1.0 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const ctx = canvas.getContext('2d');
+
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        const imgDataUrl = canvas.toDataURL('image/jpeg', kalite);
+                        const embeddedImg = await newPdfDoc.embedJpg(imgDataUrl);
+
+                        const newPage = newPdfDoc.addPage([viewport.width, viewport.height]);
+                        newPage.drawImage(embeddedImg, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+                    }
+                    const pdfBytes = await newPdfDoc.save();
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    indirmeLinkiOlustur(blob, "Sikistirilmis_" + ilkDosya.name);
+                    sonucIcerik.innerHTML = `✅ Sıkıştırma Tamamlandı! Boyut: ${formatBytes(ilkDosya.size)} ➔ ${formatBytes(blob.size)}`;
+                }
+            }
+
+            // 4. BİRLEŞTİRME
+            else if (tip === 'birlestir') {
+                if (yuklenenDosyalar.length < 2) return sonucIcerik.innerHTML = "⚠️ En az 2 dosya seçin.";
+                const mergedPdf = await PDFLib.PDFDocument.create();
+
+                for (let file of yuklenenDosyalar) {
+                    const bytes = await file.arrayBuffer();
+                    if (file.name.toLowerCase().endsWith('.pdf')) {
+                        const doc = await PDFLib.PDFDocument.load(bytes);
+                        const pages = await mergedPdf.copyPages(doc, doc.getPageIndices());
+                        pages.forEach(p => mergedPdf.addPage(p));
+                    }
+                }
+                const pdfBytes = await mergedPdf.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                indirmeLinkiOlustur(blob, "Birlestirilmis_Belge.pdf");
+                sonucIcerik.innerHTML = `✅ Belgeler birleştirildi.`;
+            }
+
+            // 5. AYIKLAMA
+            else if (tip === 'ayikla') {
+                const girdi = document.getElementById('ayiklaSayfalar').value;
+                if (!girdi) return sonucIcerik.innerHTML = "⚠️ Sayfa numarası girin.";
+                const arrayBuffer = await ilkDosya.arrayBuffer();
+                const srcDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                const newDoc = await PDFLib.PDFDocument.create();
+
+                let sayfalar = [];
+                girdi.split(',').forEach(p => {
+                    if (p.includes('-')) {
+                        let [bas, son] = p.split('-').map(Number);
+                        for (let i = bas; i <= son; i++) sayfalar.push(i - 1);
+                    } else sayfalar.push(Number(p.trim()) - 1);
+                });
+
+                const copiedPages = await newDoc.copyPages(srcDoc, sayfalar);
+                copiedPages.forEach(p => newDoc.addPage(p));
+                const pdfBytes = await newDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                indirmeLinkiOlustur(blob, "Ayiklanmis_" + ilkDosya.name);
+                sonucIcerik.innerHTML = `✅ Sayfalar ayıklandı.`;
+            }
+
+            // 6. DÖNÜŞTÜRME
+            else if (tip === 'donustur') {
+                if (ilkDosya.type.startsWith("image/")) {
+                    const bytes = await ilkDosya.arrayBuffer();
+                    const pdfDoc = await PDFLib.PDFDocument.create();
+                    let img = ilkDosya.type.includes('png') ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+                    const page = pdfDoc.addPage([img.width, img.height]);
+                    page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+                    const pdfBytes = await pdfDoc.save();
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    indirmeLinkiOlustur(blob, ilkDosya.name.split('.')[0] + ".pdf");
+                    sonucIcerik.innerHTML = `✅ Görsel PDF'e dönüştürüldü.`;
+                }
+            }
+        } catch (err) {
+            sonucIcerik.innerHTML = "⚠️ Hata: " + err.message;
+        }
+    }
+
+    function indirmeLinkiOlustur(blob, dosyaAd) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = dosyaAd;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Byte';
+        const k = 1024, i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + ['Bytes', 'KB', 'MB', 'GB'][i];
+    }
+</script>
                     <select id="islemTipi" class="form-control" onchange="islemTipiDegisti()" style="margin-top: 5px;">
                         <option value="oku">📖 Metin Okuma / Metin Çıkarma</option>
                         <option value="ozet">📝 PDF İçeriğini Özetle</option>
